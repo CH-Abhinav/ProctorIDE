@@ -4,22 +4,15 @@ import customtkinter as ctk
 
 
 class LoginFrame(ctk.CTkFrame):
-    """
-    First screen shown to the user.
-
-    This frame is responsible only for collecting login details and asking
-    the main controller (EduSyncKiosk) to authenticate.
-    """
 
     def __init__(self, parent, controller):
         super().__init__(parent, corner_radius=20, fg_color="#101826")
         self.controller = controller
 
-        # Tkinter StringVar objects make it easy to read entry values later.
+        self.subject_code_var = tk.StringVar()
         self.roll_number_var = tk.StringVar()
         self.session_pin_var = tk.StringVar()
 
-        # Center the login card within the frame.
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
@@ -36,7 +29,7 @@ class LoginFrame(ctk.CTkFrame):
 
         title_label = ctk.CTkLabel(
             card,
-            text="EduSync Secure Kiosk",
+            text="Proctor IDE Secure Kiosk",
             font=ctk.CTkFont(family="Segoe UI", size=30, weight="bold"),
             text_color="#f8fafc",
         )
@@ -50,13 +43,32 @@ class LoginFrame(ctk.CTkFrame):
         )
         subtitle_label.grid(row=1, column=0, pady=(0, 28), padx=32, sticky="w")
 
+        subject_label = ctk.CTkLabel(
+            card,
+            text="Subject Code",
+            font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
+            text_color="#cbd5e1",
+        )
+        subject_label.grid(row=2, column=0, sticky="w", pady=(0, 8), padx=32)
+
+        subject_entry = ctk.CTkEntry(
+            card,
+            textvariable=self.subject_code_var,
+            width=420,
+            height=44,
+            corner_radius=12,
+            font=ctk.CTkFont(family="Segoe UI", size=14),
+            placeholder_text="Enter Subject Code (e.g. CS-201)",
+        )
+        subject_entry.grid(row=3, column=0, sticky="ew", pady=(0, 18), padx=32)
+
         roll_label = ctk.CTkLabel(
             card,
             text="Roll Number",
             font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
             text_color="#cbd5e1",
         )
-        roll_label.grid(row=2, column=0, sticky="w", pady=(0, 8), padx=32)
+        roll_label.grid(row=4, column=0, sticky="w", pady=(0, 8), padx=32)
 
         roll_entry = ctk.CTkEntry(
             card,
@@ -67,7 +79,7 @@ class LoginFrame(ctk.CTkFrame):
             font=ctk.CTkFont(family="Segoe UI", size=14),
             placeholder_text="Enter your roll number",
         )
-        roll_entry.grid(row=3, column=0, sticky="ew", pady=(0, 18), padx=32)
+        roll_entry.grid(row=5, column=0, sticky="ew", pady=(0, 18), padx=32)
 
         pin_label = ctk.CTkLabel(
             card,
@@ -75,7 +87,7 @@ class LoginFrame(ctk.CTkFrame):
             font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
             text_color="#cbd5e1",
         )
-        pin_label.grid(row=4, column=0, sticky="w", pady=(0, 8), padx=32)
+        pin_label.grid(row=6, column=0, sticky="w", pady=(0, 8), padx=32)
 
         pin_entry = ctk.CTkEntry(
             card,
@@ -87,7 +99,7 @@ class LoginFrame(ctk.CTkFrame):
             placeholder_text="Enter the invigilator PIN",
             show="*",
         )
-        pin_entry.grid(row=5, column=0, sticky="ew", pady=(0, 28), padx=32)
+        pin_entry.grid(row=7, column=0, sticky="ew", pady=(0, 28), padx=32)
 
         login_button = ctk.CTkButton(
             card,
@@ -97,21 +109,17 @@ class LoginFrame(ctk.CTkFrame):
             font=ctk.CTkFont(family="Segoe UI", size=15, weight="bold"),
             command=self.on_login_clicked,
         )
-        login_button.grid(row=6, column=0, sticky="ew", padx=32, pady=(0, 32))
+        login_button.grid(row=8, column=0, sticky="ew", padx=32, pady=(0, 32))
 
-        # Set initial cursor focus so the user can start typing immediately.
-        roll_entry.focus_set()
+        subject_entry.focus_set()
 
-        # Optional convenience: pressing Enter inside either field triggers login.
+        subject_entry.bind("<Return>", lambda event: self.on_login_clicked())
         roll_entry.bind("<Return>", lambda event: self.on_login_clicked())
         pin_entry.bind("<Return>", lambda event: self.on_login_clicked())
 
     def on_login_clicked(self):
-        """
-        Read the current values from the entry fields and forward them to the
-        controller. The frame does not authenticate by itself.
-        """
         self.controller.authenticate_user(
+            self.subject_code_var.get(),
             self.roll_number_var.get(),
             self.session_pin_var.get(),
         )

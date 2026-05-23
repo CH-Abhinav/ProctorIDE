@@ -1,13 +1,3 @@
-"""
-Safe mock Windows lockdown controller for local integration testing.
-
-WARNING:
-This module does not modify the operating system.
-It does not kill explorer.exe, edit the registry, or disable Task Manager.
-It only simulates those actions in memory so the kiosk UI can be integrated
-and tested without touching the host machine.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -20,12 +10,6 @@ EventCallback = Callable[[str], None]
 
 @dataclass
 class WindowsBouncer:
-    """
-    Test-friendly mock of a Windows kiosk lockdown service.
-
-    The public API intentionally mirrors what a real OS-level controller might
-    expose, so it can be swapped later with a production implementation.
-    """
 
     logger: Optional[EventCallback] = print
     lockdown_active: bool = False
@@ -43,12 +27,6 @@ class WindowsBouncer:
             self.logger(entry)
 
     def engage_lockdown(self) -> bool:
-        """
-        Simulate engaging a kiosk lockdown.
-
-        Returns True when the state changed, or False if lockdown was already
-        active. This makes UI integrations easy to reason about.
-        """
         if self.lockdown_active:
             self._record("Lockdown request ignored: lockdown already active.")
             return False
@@ -65,12 +43,6 @@ class WindowsBouncer:
         return True
 
     def release_lockdown(self) -> bool:
-        """
-        Simulate releasing a kiosk lockdown.
-
-        Returns True when the state changed, or False if lockdown was already
-        inactive.
-        """
         if not self.lockdown_active:
             self._record("Release request ignored: lockdown already inactive.")
             return False
@@ -87,9 +59,6 @@ class WindowsBouncer:
         return True
 
     def get_status(self) -> Dict[str, bool]:
-        """
-        Return a snapshot of the current simulated OS state.
-        """
         return {
             "lockdown_active": self.lockdown_active,
             "explorer_running": self.explorer_running,
@@ -97,9 +66,6 @@ class WindowsBouncer:
         }
 
     def status_text(self) -> str:
-        """
-        Human-readable state summary for terminal or Tkinter display.
-        """
         status = self.get_status()
         return (
             "Lockdown active: {lockdown_active}\n"
@@ -109,9 +75,6 @@ class WindowsBouncer:
 
 
 def run_terminal_demo() -> None:
-    """
-    Minimal terminal menu for testing the mock bouncer by hand.
-    """
 
     def menu_logger(message: str) -> None:
         print(message)

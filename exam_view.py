@@ -20,9 +20,6 @@ FILE_ICON = "\U0001F4C4"
 
 
 class TerminalTab(ctk.CTkFrame):
-    """
-    Encapsulates one interactive terminal session inside the exam IDE.
-    """
 
     def __init__(self, parent, parent_exam_frame):
         super().__init__(parent, corner_radius=0, fg_color="#1F1F1F")
@@ -40,13 +37,14 @@ class TerminalTab(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
+        best_font = parent_exam_frame.get_best_monospace_font(13)
         self.terminal_output = ctk.CTkTextbox(
             self,
             height=180,
             corner_radius=0,
-            font=("Consolas", 12),
+            font=best_font,
             fg_color="#181818",
-            text_color="#22c55e",
+            text_color="#cccccc",
             border_width=0,
         )
         self.terminal_output.grid(
@@ -56,6 +54,14 @@ class TerminalTab(ctk.CTkFrame):
             padx=12,
             pady=(0, 12),
         )
+        if hasattr(self.terminal_output, "_textbox"):
+            self.terminal_output._textbox.configure(
+                padx=12,
+                pady=12,
+                spacing1=2,
+                font=best_font,
+            )
+            self.terminal_output._textbox.tag_config("prompt", foreground="#4facf7")
         self.terminal_output.configure(state="disabled")
         self.terminal_output.bind("<Return>", self.handle_terminal_enter)
         self.terminal_output.bind("<Up>", self.handle_terminal_up)
@@ -63,9 +69,6 @@ class TerminalTab(ctk.CTkFrame):
         self.print_shell_prompt()
 
     def append_terminal_output(self, message):
-        """
-        Safely write text into this terminal widget from the Tk thread.
-        """
         self.terminal_output.configure(state="normal")
         self.terminal_output.insert("end", message)
         self.terminal_output.mark_set("input_start", "end-1c")
@@ -75,15 +78,9 @@ class TerminalTab(ctk.CTkFrame):
             self.terminal_output.configure(state="disabled")
 
     def schedule_terminal_append(self, message):
-        """
-        Marshal terminal writes from worker threads onto the UI thread.
-        """
         self.after(0, lambda: self.append_terminal_output(message))
 
     def flush_terminal_buffer(self):
-        """
-        Flush accumulated process output to the terminal in timed chunks.
-        """
         with self.terminal_buffer_lock:
             chunk = self.terminal_buffer
             self.terminal_buffer = ""
@@ -95,17 +92,11 @@ class TerminalTab(ctk.CTkFrame):
             self.after(50, self.flush_terminal_buffer)
 
     def get_process_cwd(self):
-        """
-        Resolve the working directory for shell passthrough commands.
-        """
         if self.exam_frame.current_temp_dir is not None:
             return self.exam_frame.current_temp_dir.name
         return os.getcwd()
 
     def begin_streaming_process(self):
-        """
-        Reset the terminal stream buffer before a background process starts.
-        """
         with self.terminal_buffer_lock:
             self.terminal_buffer = ""
         self.is_flushing = True
@@ -117,9 +108,6 @@ class TerminalTab(ctk.CTkFrame):
         finished_message="\nProgram finished.\n",
         cleanup_temp_dir=False,
     ):
-        """
-        Pipe the active child process into this terminal and monitor its exit.
-        """
         self.cleanup_temp_dir_on_stop = cleanup_temp_dir
         self.append_terminal_output(started_message)
         self.exam_frame.run_button.configure(
@@ -133,10 +121,6 @@ class TerminalTab(ctk.CTkFrame):
             self.active_streams = 2
 
         def stream_characters(stream):
-            """
-            Read one character at a time so prompts without trailing newlines
-            appear immediately in the interactive terminal.
-            """
             try:
                 while True:
                     char = stream.read(1)
@@ -189,19 +173,16 @@ class TerminalTab(ctk.CTkFrame):
         check_process()
 
     def print_shell_prompt(self):
-        """
-        Show the EduSync shell prompt and prepare the terminal for input.
-        """
         self.terminal_output.configure(state="normal")
-        self.terminal_output.insert("end", "\nedusync> ")
+        if hasattr(self.terminal_output, "_textbox"):
+            self.terminal_output._textbox.insert("end", "\nproctor> ", "prompt")
+        else:
+            self.terminal_output.insert("end", "\nproctor> ")
         self.terminal_output.mark_set("input_start", "end-1c")
         self.terminal_output.mark_gravity("input_start", "left")
         self.terminal_output.see("end")
 
     def process_shell_command(self, command):
-        """
-        Handle built-in terminal commands and shell passthrough execution.
-        """
         if command == "run":
             self.exam_frame.run_code()
         elif command in ("clear", "cls"):
@@ -283,10 +264,6 @@ class TerminalTab(ctk.CTkFrame):
                 self.print_shell_prompt()
 
     def handle_terminal_enter(self, event=None):
-        """
-        Route terminal Enter presses either to the running process or the
-        built-in EduSync shell.
-        """
         user_input = self.terminal_output.get("input_start", "end-1c").strip()
 
         built_in_commands = ["search", "clear", "cls", "submit", "help", "exit"]
@@ -338,9 +315,6 @@ class TerminalTab(ctk.CTkFrame):
         return "break"
 
     def handle_terminal_up(self, event):
-        """
-        Replace the current shell input with the previous command in history.
-        """
         if not self.command_history or self.history_index == 0:
             return "break"
 
@@ -354,9 +328,6 @@ class TerminalTab(ctk.CTkFrame):
         return "break"
 
     def handle_terminal_down(self, event):
-        """
-        Replace the current shell input with the next command in history.
-        """
         if self.history_index >= len(self.command_history):
             return "break"
 
@@ -373,9 +344,6 @@ class TerminalTab(ctk.CTkFrame):
         return "break"
 
     def stop_process(self):
-        """
-        Force-stop this terminal's child process and recover the UI state.
-        """
         if self.current_process is not None and self.current_process.poll() is None:
             self.current_process.kill()
             self.append_terminal_output("\n[Process forcibly terminated]\n")
@@ -392,12 +360,6 @@ class TerminalTab(ctk.CTkFrame):
 
 
 class ActiveExamFrame(ctk.CTkFrame):
-    """
-    Screen shown after successful login.
-
-    This screen provides a multi-file IDE layout inspired by VS Code while
-    preserving the kiosk execution and terminal workflow.
-    """
 
     def __init__(self, parent, controller):
         super().__init__(parent, corner_radius=0, fg_color="#181818")
@@ -406,8 +368,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         self.proctor = AIProctor()
         self.camera_image = None
 
-        # Stores every open file editor textbox.
-        # Example: {"main.py": <CTkTextbox>, "utils.py": <CTkTextbox>}
         self.files = {}
         self.tree_nodes = {}
         self.tree_item_paths = {}
@@ -416,9 +376,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         self.primary_filename = "main.py"
         self.highlight_timer = None
 
-        # Glue placeholder:
-        # In the real product, this initial duration will eventually come from
-        # a Django API payload for the specific exam session.
         self.remaining_seconds = 7200
 
         self.grid_columnconfigure(0, weight=1)
@@ -579,13 +536,7 @@ class ActiveExamFrame(ctk.CTkFrame):
         )
         self.timer_label.pack(side="left", padx=(0, 12))
 
-        self.proctor_warning_label = ctk.CTkLabel(
-            action_right,
-            text="",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
-            text_color="#F48771",
-        )
-        self.proctor_warning_label.pack(side="left", padx=(0, 12))
+
 
         emergency_exit_button = ctk.CTkButton(
             action_right,
@@ -865,7 +816,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         self.create_file_tab(
             self.primary_filename,
             (
-                "# Write your exam solution here\n\n"
                 "def main():\n"
                 "    pass\n\n"
                 "if __name__ == \"__main__\":\n"
@@ -877,13 +827,16 @@ class ActiveExamFrame(ctk.CTkFrame):
         self.proctor.start_monitoring()
         self.update_webcam_feed()
 
-    def create_file_tab(self, filename, initial_content="", select_tab=True):
-        """
-        Create a new file editor and sidebar entry.
+    def get_best_monospace_font(self, size):
+        import tkinter.font as tkfont
+        available_families = tkfont.families()
+        candidates = ["Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", "Courier New"]
+        for candidate in candidates:
+            if candidate in available_families:
+                return (candidate, size)
+        return ("monospace", size)
 
-        Every new textbox gets the same auto-pair and auto-indent bindings so
-        the editing experience stays consistent across all files.
-        """
+    def create_file_tab(self, filename, initial_content="", select_tab=True):
         filename = self.normalize_path(filename)
         if filename in self.files:
             if select_tab:
@@ -891,11 +844,12 @@ class ActiveExamFrame(ctk.CTkFrame):
                 self.files[filename].focus_set()
             return self.files[filename]
 
+        best_font = self.get_best_monospace_font(14)
         editor = ctk.CTkTextbox(
             self.editor_surface,
             wrap="none",
             corner_radius=0,
-            font=("Consolas", 14),
+            font=best_font,
             fg_color="#1e1e1e",
             text_color="#d4d4d4",
             border_width=0,
@@ -916,7 +870,11 @@ class ActiveExamFrame(ctk.CTkFrame):
 
         if hasattr(editor, "_textbox"):
             editor._textbox.configure(
-                font=("Consolas", 14),
+                padx=16,
+                pady=16,
+                spacing1=4,
+                spacing3=4,
+                font=best_font,
                 relief="flat",
                 borderwidth=0,
                 highlightthickness=0,
@@ -944,23 +902,14 @@ class ActiveExamFrame(ctk.CTkFrame):
         return editor
 
     def normalize_path(self, path):
-        """
-        Normalize user-entered relative paths for the editor tree and sandbox.
-        """
         return path.replace("\\", "/").strip().strip("/")
 
     def get_selected_tree_path(self):
-        """
-        Return the logical relative path for the currently selected tree node.
-        """
         if not self.selected_tree_node:
             return ""
         return self.tree_item_paths.get(self.selected_tree_node, "")
 
     def insert_path_into_tree(self, filepath):
-        """
-        Insert a nested file path into the tree, creating folder nodes as needed.
-        """
         filepath = self.normalize_path(filepath)
         parts = [part for part in filepath.split("/") if part]
         if not parts:
@@ -996,9 +945,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         return self.tree_nodes[file_path]
 
     def ensure_folder_path_in_tree(self, folder_path):
-        """
-        Ensure a nested folder path exists in the tree and return its node id.
-        """
         folder_path = self.normalize_path(folder_path)
         if not folder_path:
             return ""
@@ -1027,9 +973,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         return parent_item
 
     def show_tree_context_menu(self, event):
-        """
-        Open the file tree context menu at the clicked node.
-        """
         item = self.file_tree.identify_row(event.y)
         if item:
             self.file_tree.selection_set(item)
@@ -1037,9 +980,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         self.tree_context_menu.tk_popup(event.x_root, event.y_root)
 
     def get_insertion_parent(self):
-        """
-        Resolve which tree node/path should receive a new child entry.
-        """
         selected_path = self.get_selected_tree_path()
         if not selected_path:
             return "", ""
@@ -1053,9 +993,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         return self.selected_tree_node, selected_path
 
     def on_new_folder_click(self):
-        """
-        Prompt for a folder name and insert it under the selected tree node.
-        """
         dialog = ctk.CTkInputDialog(
             text="Enter the new folder name:",
             title="Create New Folder",
@@ -1089,9 +1026,6 @@ class ActiveExamFrame(ctk.CTkFrame):
             self.selected_tree_node = folder_node
 
     def on_new_file_click(self):
-        """
-        Prompt for a filename and create it beneath the selected tree node.
-        """
         dialog = ctk.CTkInputDialog(
             text="Enter the new filename:",
             title="Create New File",
@@ -1132,9 +1066,6 @@ class ActiveExamFrame(ctk.CTkFrame):
             self.selected_tree_node = file_node
 
     def on_delete_click(self):
-        """
-        Delete the selected file or folder from the explorer and local editor state.
-        """
         node = self.selected_tree_node
         if not node:
             return
@@ -1184,9 +1115,6 @@ class ActiveExamFrame(ctk.CTkFrame):
             self.editor_title_label.configure(text="")
 
     def on_tree_double_click(self, event):
-        """
-        Open a file from the folder tree when the user double-clicks it.
-        """
         selected_items = self.file_tree.selection()
         if not selected_items:
             return
@@ -1198,9 +1126,6 @@ class ActiveExamFrame(ctk.CTkFrame):
             self.files[selected_path].focus_set()
 
     def launch_browser(self, target_url="http://127.0.0.1:8080", terminal=None):
-        """
-        Launch a locked-down embedded browser in a separate Python process.
-        """
         terminal = terminal or self.get_active_terminal()
         blocker_js = (
             "document.addEventListener('click', function(e) { "
@@ -1242,7 +1167,6 @@ class ActiveExamFrame(ctk.CTkFrame):
                 text=True,
             )
 
-            # Create a tiny watchdog to listen for silent crashes
             def watch_browser():
                 stdout, stderr = process.communicate()
                 if process.returncode != 0:
@@ -1260,12 +1184,15 @@ class ActiveExamFrame(ctk.CTkFrame):
             )
 
     def setup_syntax_tags(self, editor):
-        """
-        Configure reusable syntax highlighting tags for a code editor.
-        """
+        best_font = self.get_best_monospace_font(14)
+        italic_font = (best_font[0], best_font[1], "italic")
+
         editor.tag_config("keyword", foreground="#569cd6")
         editor.tag_config("string", foreground="#ce9178")
-        editor.tag_config("comment", foreground="#6a9955")
+        if hasattr(editor, "_textbox"):
+            editor._textbox.tag_config("comment", foreground="#6A9955", font=italic_font)
+        else:
+            editor.tag_config("comment", foreground="#6A9955")
         editor.tag_config("number", foreground="#b5cea8")
         editor.tag_raise("keyword")
         editor.tag_raise("string")
@@ -1273,9 +1200,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         editor.tag_raise("number")
 
     def on_key_release(self, event, filename):
-        """
-        Debounce syntax highlighting so rapid typing does not block Tkinter.
-        """
         if self.highlight_timer is not None:
             self.after_cancel(self.highlight_timer)
 
@@ -1285,9 +1209,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         )
 
     def get_language_keywords(self, extension):
-        """
-        Return keyword sets tuned to the active file extension.
-        """
         keyword_map = {
             ".py": [
                 "def",
@@ -1410,9 +1331,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         return keyword_map.get(extension, [])
 
     def offset_to_index(self, offset, line_offsets):
-        """
-        Convert a raw string offset into Tkinter's line.column format.
-        """
         line_number = bisect_right(line_offsets, offset) - 1
         column = offset - line_offsets[line_number]
         return f"{line_number + 1}.{column}"
@@ -1426,9 +1344,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         tag_name,
         start_index="1.0",
     ):
-        """
-        Apply a syntax tag to every regex match in the editor content.
-        """
         for match in re.finditer(pattern, content, re.MULTILINE):
             start_offset, end_offset = match.span()
             if start_offset == end_offset:
@@ -1440,9 +1355,6 @@ class ActiveExamFrame(ctk.CTkFrame):
             )
 
     def highlight_syntax(self, editor, filename, line_only=False):
-        """
-        Colorize the editor content using lightweight regex-based rules.
-        """
         self.highlight_timer = None
 
         extension = os.path.splitext(filename)[1].lower()
@@ -1515,9 +1427,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         )
 
     def switch_to_file(self, filename):
-        """
-        Hide the current editor and show the requested file editor.
-        """
         filename = self.normalize_path(filename)
         if filename not in self.files:
             return
@@ -1540,9 +1449,6 @@ class ActiveExamFrame(ctk.CTkFrame):
             self.file_tree.see(tree_item)
 
     def prompt_new_file(self):
-        """
-        Ask the student for a filename and create a new editor entry.
-        """
         dialog = ctk.CTkInputDialog(
             text="Enter the new filename (example: utils.py):",
             title="Create New File",
@@ -1569,26 +1475,17 @@ class ActiveExamFrame(ctk.CTkFrame):
         self.create_file_tab(filename, "", select_tab=True)
 
     def get_active_editor(self):
-        """
-        Return the textbox for the currently visible file.
-        """
         if self.active_filename is None:
             return None
         return self.files[self.active_filename]
 
     def post_dropdown_menu(self, menu, button):
-        """
-        Show a Tk dropdown menu aligned directly beneath its trigger button.
-        """
         x_position = button.winfo_rootx()
         y_position = button.winfo_rooty() + button.winfo_height()
         menu.post(x_position, y_position)
         return "break"
 
     def undo_active_editor(self):
-        """
-        Undo the last edit in the active editor if the stack allows it.
-        """
         editor = self.get_active_editor()
         if editor is None:
             return
@@ -1599,9 +1496,6 @@ class ActiveExamFrame(ctk.CTkFrame):
             pass
 
     def redo_active_editor(self):
-        """
-        Redo the last reverted edit in the active editor if possible.
-        """
         editor = self.get_active_editor()
         if editor is None:
             return
@@ -1612,24 +1506,14 @@ class ActiveExamFrame(ctk.CTkFrame):
             pass
 
     def insert_four_spaces(self, event):
-        """
-        Replace the default Tab behavior with four literal spaces so pressing
-        Tab never jumps focus or inserts inconsistent tab characters.
-        """
         event.widget.insert("insert", "    ")
         return "break"
 
     def format_time(self, total_seconds):
-        """
-        Convert raw seconds into the MM:SS format requested by the UI.
-        """
         minutes, seconds = divmod(max(total_seconds, 0), 60)
         return f"{minutes:02d}:{seconds:02d}"
 
     def update_timer(self):
-        """
-        Countdown loop for the exam timer.
-        """
         self.timer_label.configure(text=self.format_time(self.remaining_seconds))
 
         if self.remaining_seconds > 0:
@@ -1637,9 +1521,6 @@ class ActiveExamFrame(ctk.CTkFrame):
             self.after(1000, self.update_timer)
 
     def update_webcam_feed(self):
-        """
-        Refresh the picture-in-picture AI proctor preview without blocking Tk.
-        """
         frame, strikes = self.proctor.get_latest_frame_and_strikes()
 
         if frame is not None:
@@ -1648,20 +1529,12 @@ class ActiveExamFrame(ctk.CTkFrame):
             self.camera_image = ctk_image
             self.camera_label.configure(image=ctk_image, text="")
 
-        if strikes > 0:
-            self.proctor_warning_label.configure(text=f"AI Strikes: {strikes}")
-        else:
-            self.proctor_warning_label.configure(text="")
-
         if self.proctor.is_running:
             self.after(33, self.update_webcam_feed)
         else:
             self.after(250, self.update_webcam_feed)
 
     def cleanup_temp_dir(self):
-        """
-        Remove the current sandbox directory after a run finishes.
-        """
         if self.current_temp_dir is not None:
             try:
                 self.current_temp_dir.cleanup()
@@ -1670,9 +1543,6 @@ class ActiveExamFrame(ctk.CTkFrame):
             self.current_temp_dir = None
 
     def reset_run_button(self):
-        """
-        Restore the run button to its default execute state.
-        """
         self.run_button.configure(
             text="Run",
             fg_color="#2A2D2E",
@@ -1682,16 +1552,10 @@ class ActiveExamFrame(ctk.CTkFrame):
         )
 
     def get_active_terminal(self):
-        """
-        Return the currently selected terminal tab instance.
-        """
         active_tab_name = self.terminal_tabview.get()
         return self.terminals[active_tab_name]
 
     def get_running_terminal(self):
-        """
-        Return the first terminal that currently owns a live process.
-        """
         for terminal in self.terminals.values():
             if (
                 terminal.current_process is not None
@@ -1701,9 +1565,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         return None
 
     def stop_process(self):
-        """
-        Force-stop every running terminal process before the exam frame exits.
-        """
         self.proctor.is_running = False
         for terminal in self.terminals.values():
             if (
@@ -1713,9 +1574,6 @@ class ActiveExamFrame(ctk.CTkFrame):
                 terminal.stop_process()
 
     def handle_editor_autopair(self, event):
-        """
-        Insert matching closing characters and place the caret between them.
-        """
         pairs = {
             "(": ")",
             "[": "]",
@@ -1737,9 +1595,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         return "break"
 
     def auto_indent(self, event=None):
-        """
-        Copy the current line's leading whitespace onto the next line.
-        """
         editor = event.widget
         current_line_start = editor.index("insert linestart")
         current_line_text = editor.get(current_line_start, "insert lineend")
@@ -1756,9 +1611,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         return "break"
 
     def confirm_emergency_exit(self):
-        """
-        Ask for confirmation before leaving the kiosk and forfeiting the exam.
-        """
         should_exit = messagebox.askyesno(
             "Emergency Exit",
             "Are you sure you want to exit? This will forfeit your exam.",
@@ -1767,12 +1619,6 @@ class ActiveExamFrame(ctk.CTkFrame):
             self.controller.debug_close()
 
     def run_code(self):
-        """
-        Execute the current project inside a temporary sandbox directory.
-
-        Every open tab is written out as a real physical file first, then the
-        currently active file determines which runtime or compiler to use.
-        """
         active_tab_name = self.terminal_tabview.get()
         active_terminal = self.terminals[active_tab_name]
         running_terminal = self.get_running_terminal()
@@ -1800,7 +1646,6 @@ class ActiveExamFrame(ctk.CTkFrame):
         _, extension = os.path.splitext(active_file)
         extension = extension.lower()
 
-        # Clear the terminal so each run starts with fresh output.
         active_terminal.terminal_output.configure(state="normal")
         active_terminal.terminal_output.delete("1.0", "end")
         active_terminal.terminal_output.insert(
@@ -1922,7 +1767,6 @@ class ActiveExamFrame(ctk.CTkFrame):
 
                 active_terminal.append_terminal_output("Compilation successful.\n")
 
-            # 2. LAUNCH THE STUDENT CODE IN THE BACKGROUND
             active_terminal.current_process = subprocess.Popen(
                 run_cmd,
                 stdin=subprocess.PIPE,

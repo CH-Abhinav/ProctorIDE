@@ -15,9 +15,6 @@ class AIProctor:
         self.lock = threading.Lock()
 
     def run_camera_loop(self):
-        """
-        Boots up the webcam and continuously analyzes frames in a worker thread.
-        """
         mp_face_detection = mp.solutions.face_detection
         face_detection = mp_face_detection.FaceDetection(
             model_selection=0,
@@ -102,9 +99,6 @@ class AIProctor:
             self.is_running = False
 
     def start_monitoring(self):
-        """
-        Launch the webcam processing loop in a background daemon thread.
-        """
         if self.is_running:
             return
 
@@ -112,9 +106,6 @@ class AIProctor:
         threading.Thread(target=self.run_camera_loop, daemon=True).start()
 
     def get_latest_frame_and_strikes(self):
-        """
-        Safely return the latest annotated RGB frame and current strike count.
-        """
         with self.lock:
             frame = None if self.latest_frame is None else np.copy(self.latest_frame)
             strikes = self.violation_strikes
