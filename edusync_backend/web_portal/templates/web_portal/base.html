@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Proctor IDE Command Center{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #0b1220;
+            --bg-panel: rgba(15, 23, 42, 0.9);
+            --bg-panel-soft: rgba(30, 41, 59, 0.7);
+            --border-soft: rgba(148, 163, 184, 0.18);
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --accent: #14b8a6;
+            --accent-strong: #0f766e;
+            --danger-soft: rgba(220, 38, 38, 0.2);
+            --warning-soft: rgba(245, 158, 11, 0.18);
+            --shadow-soft: 0 20px 55px rgba(2, 8, 23, 0.38);
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+            color: var(--text-main);
+            background:
+                radial-gradient(circle at top left, rgba(20, 184, 166, 0.18), transparent 32%),
+                radial-gradient(circle at top right, rgba(59, 130, 246, 0.16), transparent 26%),
+                linear-gradient(135deg, #020617 0%, #0f172a 42%, #111827 100%);
+        }
+
+        .navbar-glass,
+        .panel-card,
+        .summary-card,
+        .code-shell {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-soft);
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(18px);
+        }
+
+        .navbar-glass {
+            border-radius: 1.25rem;
+        }
+
+        .brand-mark {
+            width: 2.5rem;
+            height: 2.5rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.9rem;
+            background: linear-gradient(135deg, var(--accent), #38bdf8);
+            color: #04111d;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+        }
+
+        .hero-kicker {
+            color: #7dd3fc;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .page-title {
+            font-size: clamp(2rem, 4vw, 3rem);
+            font-weight: 800;
+            letter-spacing: -0.04em;
+        }
+
+        .muted-copy {
+            color: var(--text-muted);
+        }
+
+        .summary-card,
+        .panel-card {
+            border-radius: 1.5rem;
+        }
+
+        .summary-number {
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+        }
+
+        .table-dark-portal {
+            --bs-table-bg: transparent;
+            --bs-table-color: var(--text-main);
+            --bs-table-border-color: rgba(148, 163, 184, 0.12);
+            margin-bottom: 0;
+        }
+
+        .table-dark-portal thead th {
+            color: #cbd5e1;
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            border-bottom-width: 1px;
+        }
+
+        .table-dark-portal tbody tr {
+            transition: transform 0.18s ease, background-color 0.18s ease;
+        }
+
+        .table-dark-portal tbody tr:hover {
+            background-color: rgba(30, 41, 59, 0.72);
+            transform: translateY(-1px);
+        }
+
+        .status-pill,
+        .subject-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            border-radius: 999px;
+            padding: 0.5rem 0.85rem;
+            font-size: 0.82rem;
+            font-weight: 700;
+        }
+
+        .status-pill.active {
+            background: rgba(20, 184, 166, 0.14);
+            color: #99f6e4;
+        }
+
+        .status-pill.inactive {
+            background: rgba(148, 163, 184, 0.15);
+            color: #cbd5e1;
+        }
+
+        .subject-pill {
+            background: rgba(56, 189, 248, 0.14);
+            color: #bae6fd;
+        }
+
+        .violation-row {
+            background: linear-gradient(90deg, var(--danger-soft), rgba(220, 38, 38, 0.04));
+        }
+
+        .code-shell {
+            border-radius: 1.5rem;
+            overflow: hidden;
+        }
+
+        pre {
+            margin: 0;
+            padding: 1.5rem;
+            max-height: 68vh;
+            overflow: auto;
+            color: #dbeafe;
+            background: rgba(2, 6, 23, 0.92);
+            font-size: 0.92rem;
+            line-height: 1.6;
+        }
+
+        .btn-portal {
+            border-radius: 999px;
+            padding-inline: 1rem;
+            font-weight: 700;
+        }
+
+        .form-control,
+        .form-control:focus {
+            background: rgba(15, 23, 42, 0.82);
+            border-color: rgba(148, 163, 184, 0.22);
+            color: var(--text-main);
+            box-shadow: none;
+        }
+
+        .form-control::placeholder {
+            color: rgba(148, 163, 184, 0.72);
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="container py-4 py-lg-5">
+        {% block navbar %}
+        <nav class="navbar navbar-expand-lg navbar-glass px-4 py-3 mb-4 mb-lg-5">
+            <div class="container-fluid px-0">
+                <a class="navbar-brand d-flex align-items-center gap-3 text-white fw-semibold m-0" href="{% url 'dashboard_home' %}">
+                    <span class="brand-mark">PI</span>
+                    <span>Proctor IDE Dashboard</span>
+                </a>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="muted-copy small">Exam operations, submissions, and integrity review</span>
+                    {% if request.user.is_authenticated %}
+                    <a href="{% url 'portal_logout' %}" class="btn btn-outline-light btn-sm btn-portal">Logout</a>
+                    {% endif %}
+                </div>
+            </div>
+        </nav>
+        {% endblock %}
+
+        {% block content %}{% endblock %}
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

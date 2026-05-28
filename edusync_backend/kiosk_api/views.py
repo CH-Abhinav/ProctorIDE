@@ -1,50 +1,122 @@
+from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework import status
-from .models import Student, Exam, Submission
-from .serializers import ExamSerializer
+
+from .models import Exam, Student, Submission
+
+
+def _get_active_exam_for_submission(student):
+    active_exams = list(Exam.objects.filter(is_active=True).order_by("-id"))
+    if not active_exams:
+        return None, Response(
+            {"error": "No active exam right now."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    if len(active_exams) == 1:
+        return active_exams[0], None
+
+    latest_submission = (
+        Submission.objects.filter(student=student, exam__is_active=True)
+        .select_related("exam")
+        .order_by("-submitted_at")
+        .first()
+    )
+    if latest_submission is None:
+        return None, Response(
+            {
+                "error": (
+                    "Multiple active exams were found and the student's exam "
+                    "could not be determined."
+                )
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return latest_submission.exam, None
+
 
 @api_view(['POST'])
 def kiosk_login(request):
-    roll_number = request.data.get('roll_number')
-    session_pin = request.data.get('session_pin')
+    subject_code = (request.data.get('subject_code') or '').strip()
+    roll_number = (request.data.get('roll_number') or '').strip()
+    session_pin = (request.data.get('session_pin') or '').strip()
 
-    # 1. Check if the student exists and PIN is correct
+    if not subject_code or not roll_number or not session_pin:
+        return Response(
+            {
+                "error": (
+                    "subject_code, roll_number, and session_pin are required."
+                )
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     try:
         student = Student.objects.get(roll_number=roll_number, session_pin=session_pin)
     except Student.DoesNotExist:
-        return Response({"error": "Invalid Roll Number or PIN"}, status=status.HTTP_401_UNAUTHORIZED)
+        return Response(
+            {"error": "Invalid Roll Number or PIN"},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
 
-    # 2. Find the active exam (we assume only 1 exam is active at a time for labs)
-    active_exam = Exam.objects.filter(is_active=True).first()
+    active_exam = (
+        Exam.objects.filter(is_active=True, subject_code=subject_code)
+        .order_by("-id")
+        .first()
+    )
     if not active_exam:
-        return Response({"error": "No active exam right now"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"error": "No active exam found for this subject code."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
 
-    # 3. Success! Send back the student name and the exam timer duration
     return Response({
-        "message": "Login successful",
         "student_name": student.name,
-        "exam": ExamSerializer(active_exam).data
+        "exam": {
+            "title": active_exam.title,
+            "subject_code": active_exam.subject_code,
+            "duration_seconds": active_exam.duration_seconds,
+        },
     })
+
 
 @api_view(['POST'])
 def submit_exam(request):
-    roll_number = request.data.get('roll_number')
-    code = request.data.get('code_content')
+    roll_number = (request.data.get('roll_number') or '').strip()
+    code_content = request.data.get('code_content') or ''
     violations = request.data.get('violation_count', 0)
+
+    if not roll_number:
+        return Response(
+            {"error": "roll_number is required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        violations = int(violations)
+    except (TypeError, ValueError):
+        return Response(
+            {"error": "violation_count must be an integer."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     try:
         student = Student.objects.get(roll_number=roll_number)
-        active_exam = Exam.objects.filter(is_active=True).first()
-        
-        # Save their work to the database!
-        Submission.objects.create(
-            student=student,
-            exam=active_exam,
-            code_content=code,
-            violation_count=violations
+    except Student.DoesNotExist:
+        return Response(
+            {"error": "Student not found."},
+            status=status.HTTP_404_NOT_FOUND,
         )
-        return Response({"message": "Exam submitted successfully!"})
-        
-    except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    active_exam, error_response = _get_active_exam_for_submission(student)
+    if error_response is not None:
+        return error_response
+
+    Submission.objects.create(
+        student=student,
+        exam=active_exam,
+        code_content=code_content,
+        violation_count=violations,
+    )
+    return Response({"message": "Exam submitted successfully!"})

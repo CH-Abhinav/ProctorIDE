@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.db import models
 
 class Student(models.Model):
@@ -10,11 +11,13 @@ class Student(models.Model):
 
 class Exam(models.Model):
     title = models.CharField(max_length=200)
+    examiner = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    subject_code = models.CharField(max_length=20, default="UNKNOWN")
     duration_seconds = models.IntegerField(default=7200)
     is_active = models.BooleanField(default=False)
 
     def __str__(self):
-        return self.title
+        return f"{self.title} ({self.subject_code})"
 
 class Submission(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)

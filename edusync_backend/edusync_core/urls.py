@@ -15,9 +15,10 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include # <-- Make sure 'include' is imported
+from django.urls import include, path
 
 urlpatterns = [
+    path('', include('web_portal.urls')),
     path('admin/', admin.site.urls),
-    path('api/', include('kiosk_api.urls')), # <-- Routes Kiosk traffic to your app
+    path('api/', include('kiosk_api.urls')),
 ]

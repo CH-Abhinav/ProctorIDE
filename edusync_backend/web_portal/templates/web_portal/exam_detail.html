@@ -1,0 +1,80 @@
+{% extends "web_portal/base.html" %}
+
+{% block title %}{{ exam.title }} | Proctor IDE Command Center{% endblock %}
+
+{% block content %}
+<section class="mb-4">
+    <div class="row g-4 align-items-stretch">
+        <div class="col-lg-8">
+            <div class="panel-card p-4 h-100">
+                <p class="hero-kicker mb-2">Exam Review</p>
+                <h1 class="page-title h2 mb-3">{{ exam.title }}</h1>
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <span class="subject-pill">{{ exam.subject_code }}</span>
+                    <span class="status-pill {% if exam.is_active %}active{% else %}inactive{% endif %}">
+                        {% if exam.is_active %}Active Session{% else %}Archived Session{% endif %}
+                    </span>
+                </div>
+                <p class="muted-copy mb-0">Duration: {{ exam.duration_seconds }} seconds. Review every recorded submission below, with strike-heavy attempts surfaced visually.</p>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="summary-card p-4 h-100">
+                <p class="muted-copy text-uppercase small mb-2">Submission Volume</p>
+                <div class="summary-number">{{ exam.submission_total }}</div>
+                <p class="muted-copy mb-0">Each row links to the full captured code submission.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="panel-card p-3 p-lg-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-3">
+        <div>
+            <h2 class="h4 mb-1">Student Submissions</h2>
+            <p class="muted-copy mb-0">Rows with violations are highlighted for rapid triage.</p>
+        </div>
+        <a href="{% url 'dashboard_home' %}" class="btn btn-outline-light btn-sm btn-portal">Back to Dashboard</a>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-dark-portal align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">Roll Number</th>
+                    <th scope="col">Student</th>
+                    <th scope="col">Strikes</th>
+                    <th scope="col">Submitted</th>
+                    <th scope="col" class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for submission in submissions %}
+                <tr class="{% if submission.violation_count > 0 %}violation-row{% endif %}">
+                    <td class="fw-semibold">{{ submission.student.roll_number }}</td>
+                    <td>{{ submission.student.name }}</td>
+                    <td>
+                        {% if submission.violation_count > 0 %}
+                        <span class="badge text-bg-warning">{{ submission.violation_count }} strike{{ submission.violation_count|pluralize }}</span>
+                        {% else %}
+                        <span class="badge text-bg-success">0 strikes</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ submission.submitted_at|date:"M d, Y H:i" }}</td>
+                    <td class="text-end">
+                        <a href="{% url 'submission_detail' submission.id %}" class="btn btn-outline-light btn-sm btn-portal">Open Submission</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-5">
+                        <div class="fw-semibold mb-1">No submissions yet for this exam.</div>
+                        <div class="muted-copy">Once the desktop kiosk uploads work, it will appear here automatically.</div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

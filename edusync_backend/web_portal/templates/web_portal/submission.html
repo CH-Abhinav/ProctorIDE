@@ -1,0 +1,42 @@
+{% extends "web_portal/base.html" %}
+
+{% block title %}Submission {{ submission.student.roll_number }} | Proctor IDE Command Center{% endblock %}
+
+{% block content %}
+<section class="mb-4">
+    <div class="row g-4 align-items-stretch">
+        <div class="col-lg-8">
+            <div class="panel-card p-4 h-100">
+                <p class="hero-kicker mb-2">Submission Review</p>
+                <h1 class="page-title h2 mb-3">{{ submission.student.name }}</h1>
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <span class="subject-pill">{{ submission.exam.subject_code }}</span>
+                    <span class="status-pill {% if submission.exam.is_active %}active{% else %}inactive{% endif %}">
+                        {{ submission.exam.title }}
+                    </span>
+                </div>
+                <p class="muted-copy mb-0">Roll number {{ submission.student.roll_number }} submitted on {{ submission.submitted_at|date:"M d, Y H:i" }}.</p>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="summary-card p-4 h-100 {% if submission.violation_count > 0 %}border-warning{% endif %}">
+                <p class="muted-copy text-uppercase small mb-2">AI Strike Count</p>
+                <div class="summary-number">{{ submission.violation_count }}</div>
+                <p class="muted-copy mb-0">Use this as a review signal alongside the submitted code and lab observations.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
+    <div>
+        <h2 class="h4 mb-1">Captured Code</h2>
+        <p class="muted-copy mb-0">Rendered exactly as it was submitted by the kiosk application.</p>
+    </div>
+    <a href="{% url 'exam_detail' submission.exam.id %}" class="btn btn-outline-light btn-sm btn-portal">Back to Exam</a>
+</section>
+
+<section class="code-shell">
+    <pre><code>{{ submission.code_content }}</code></pre>
+</section>
+{% endblock %}
