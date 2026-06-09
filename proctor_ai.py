@@ -14,6 +14,14 @@ class AIProctor:
         self.last_seen_time = None
         self.lock = threading.Lock()
 
+    @property
+    def violation_count(self):
+        return self.violation_strikes
+
+    @violation_count.setter
+    def violation_count(self, value):
+        self.violation_strikes = value
+
     def run_camera_loop(self):
         mp_face_detection = mp.solutions.face_detection
         face_detection = mp_face_detection.FaceDetection(

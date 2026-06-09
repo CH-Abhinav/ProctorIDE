@@ -1,3 +1,7 @@
+import os
+import shutil
+import tempfile
+
 from tkinter import messagebox
 
 import customtkinter as ctk
@@ -98,6 +102,7 @@ class ProctorIDEKiosk(ctk.CTk):
             if response.status_code == 200:
                 data = response.json()
                 print(f"Login Successful! Welcome {data['student_name']}")
+                self.session_token = data.get("session_token", "")
 
                 real_duration = data["exam"]["duration_seconds"]
                 self.frames["ActiveExamFrame"].remaining_seconds = real_duration
@@ -132,29 +137,45 @@ class ProctorIDEKiosk(ctk.CTk):
     def submit_exam(self):
         roll_number = self.frames["LoginFrame"].roll_number_var.get()
         strikes = self.violation_count
+        session_token = getattr(self, "session_token", "")
 
         exam_frame = self.frames["ActiveExamFrame"]
-        combined_code = ""
-        for filename, textbox in exam_frame.files.items():
-            file_content = textbox.get("1.0", "end-1c")
-            combined_code += f"----- {filename} -----\n{file_content}\n\n"
+
+        exam_frame.sync_files_to_workspace()
 
         print("Uploading multi-file submission to Django server...")
 
-        api_url = "http://127.0.0.1:8000/api/submit/"
-        payload = {
-            "roll_number": roll_number,
-            "code_content": combined_code,
-            "violation_count": strikes,
-        }
-
+        workspace_dir = os.path.abspath(exam_frame.WORKSPACE_DIR)
+        archive_base = os.path.join(tempfile.gettempdir(), "submission")
+        archive_path = shutil.make_archive(archive_base, "zip", workspace_dir)
         submitted_successfully = False
+
         try:
-            response = requests.post(api_url, json=payload, timeout=5)
+            api_url = "http://127.0.0.1:8000/api/submit/"
+            data = {
+                "roll_number": roll_number,
+                "violation_count": strikes,
+                "session_token": session_token,
+            }
+
+            with open(archive_path, "rb") as archive_file:
+                files = {"file": ("submission.zip", archive_file, "application/zip")}
+                response = requests.post(
+                    api_url,
+                    data=data,
+                    files=files,
+                    timeout=5,
+                )
 
             if response.status_code == 200:
                 print("Exam successfully saved to database!")
                 submitted_successfully = True
+                try:
+                    if os.path.isdir(workspace_dir):
+                        shutil.rmtree(workspace_dir)
+                    os.makedirs(workspace_dir, exist_ok=True)
+                except OSError as cleanup_error:
+                    print(f"Workspace cleanup failed: {cleanup_error}")
                 messagebox.showinfo(
                     "Success",
                     "Your exam has been submitted safely. You may now leave the lab.",
@@ -171,6 +192,12 @@ class ProctorIDEKiosk(ctk.CTk):
                 "Failed to upload exam. Please call an invigilator.\n"
                 f"Error: {error}",
             )
+
+        finally:
+            try:
+                os.remove(archive_path)
+            except OSError:
+                pass
 
         if submitted_successfully:
             self.ensure_lockdown_released()

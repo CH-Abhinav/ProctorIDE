@@ -1,0 +1,22 @@
+# Environments
+venv/
+env/
+
+# PyInstaller Build folders
+dist/
+build/
+*.spec
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+
+# Django stuff (Optional: uncomment if you don't want to push your test database)
+# db.sqlite3
+# media/

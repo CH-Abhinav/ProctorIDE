@@ -11,6 +11,8 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 from PIL import Image
+import requests
+import shutil
 
 from proctor_ai import AIProctor
 
@@ -24,6 +26,14 @@ class TerminalTab(ctk.CTkFrame):
     def __init__(self, parent, parent_exam_frame):
         super().__init__(parent, corner_radius=0, fg_color="#1F1F1F")
         self.exam_frame = parent_exam_frame
+        self.WORKSPACE_DIR = getattr(
+            parent_exam_frame,
+            "WORKSPACE_DIR",
+            os.path.abspath("./proctor_workspace"),
+        )
+        os.makedirs(self.WORKSPACE_DIR, exist_ok=True)
+        self.current_dir = self.WORKSPACE_DIR
+        self.prompt_text = "proctorIDE> "
         self.current_process = None
         self.terminal_buffer = ""
         self.command_history = []
@@ -66,6 +76,8 @@ class TerminalTab(ctk.CTkFrame):
         self.terminal_output.bind("<Return>", self.handle_terminal_enter)
         self.terminal_output.bind("<Up>", self.handle_terminal_up)
         self.terminal_output.bind("<Down>", self.handle_terminal_down)
+        self.terminal_output.bind("<BackSpace>", self.prevent_prompt_deletion)
+        self.terminal_output.bind("<Left>", self.prevent_prompt_deletion)
         self.print_shell_prompt()
 
     def append_terminal_output(self, message):
@@ -80,6 +92,17 @@ class TerminalTab(ctk.CTkFrame):
     def schedule_terminal_append(self, message):
         self.after(0, lambda: self.append_terminal_output(message))
 
+    def _is_within_workspace(self, candidate_path):
+        try:
+            workspace_root = os.path.normcase(os.path.abspath(self.WORKSPACE_DIR))
+            candidate_root = os.path.normcase(os.path.abspath(candidate_path))
+            return (
+                os.path.commonpath([workspace_root, candidate_root])
+                == workspace_root
+            )
+        except ValueError:
+            return False
+
     def flush_terminal_buffer(self):
         with self.terminal_buffer_lock:
             chunk = self.terminal_buffer
@@ -92,9 +115,7 @@ class TerminalTab(ctk.CTkFrame):
             self.after(50, self.flush_terminal_buffer)
 
     def get_process_cwd(self):
-        if self.exam_frame.current_temp_dir is not None:
-            return self.exam_frame.current_temp_dir.name
-        return os.getcwd()
+        return self.current_dir
 
     def begin_streaming_process(self):
         with self.terminal_buffer_lock:
@@ -168,6 +189,7 @@ class TerminalTab(ctk.CTkFrame):
                 self.exam_frame.cleanup_temp_dir()
             self.cleanup_temp_dir_on_stop = False
             self.exam_frame.reset_run_button()
+            self.exam_frame.refresh_workspace_tree()
             self.print_shell_prompt()
 
         check_process()
@@ -175,14 +197,39 @@ class TerminalTab(ctk.CTkFrame):
     def print_shell_prompt(self):
         self.terminal_output.configure(state="normal")
         if hasattr(self.terminal_output, "_textbox"):
-            self.terminal_output._textbox.insert("end", "\nproctor> ", "prompt")
+            self.terminal_output._textbox.insert(
+                "end",
+                f"\n{self.prompt_text}",
+                "prompt",
+            )
         else:
-            self.terminal_output.insert("end", "\nproctor> ")
+            self.terminal_output.insert("end", f"\n{self.prompt_text}")
         self.terminal_output.mark_set("input_start", "end-1c")
         self.terminal_output.mark_gravity("input_start", "left")
         self.terminal_output.see("end")
 
+    def prevent_prompt_deletion(self, event):
+        if self.terminal_output.compare("insert", "<=", "input_start"):
+            self.terminal_output.mark_set("insert", "input_start")
+            return "break"
+        return None
+
     def process_shell_command(self, command):
+        command = command.strip()
+        
+        if command.startswith("cd "):
+            target_dir = command[3:].strip()
+            
+            if not hasattr(self, 'current_dir'):
+                self.current_dir = os.getcwd() 
+            
+            new_dir = os.path.abspath(os.path.join(self.current_dir, target_dir))
+            self.current_dir = new_dir
+            
+            self.append_terminal_output(f"\nChanged directory to {self.current_dir}\n")
+            self.print_shell_prompt()
+            return
+            
         if command == "run":
             self.exam_frame.run_code()
         elif command in ("clear", "cls"):
@@ -191,83 +238,55 @@ class TerminalTab(ctk.CTkFrame):
             self.print_shell_prompt()
         elif command == "submit":
             self.exam_frame.controller.submit_exam()
-        elif command == "help":
-            self.append_terminal_output(
-                "run - Execute editor code\n"
-                "clear - Clear terminal\n"
-                "submit - Submit exam\n"
-                "search <url> - Open the secure embedded browser for local URLs\n"
-                "exit - Leave the exam using the emergency flow\n"
-            )
-            self.print_shell_prompt()
-        elif command == "exit":
-            self.append_terminal_output(
-                "Use the Emergency Exit button to leave the exam.\n"
-            )
-            self.print_shell_prompt()
         elif command.startswith("search "):
             target_url = command.split(None, 1)[1].strip()
-            if not target_url:
-                self.append_terminal_output(
-                    "Usage: search http://127.0.0.1:8080\n"
-                )
-                self.print_shell_prompt()
-                return
-
-            normalized_url = target_url.lower()
-            if (
-                "localhost" not in normalized_url
-                and "127.0.0.1" not in normalized_url
-            ):
-                self.append_terminal_output(
-                    "SECURITY WARNING: External navigation blocked. "
-                    "Only localhost and 127.0.0.1 are allowed.\n"
-                )
-                self.print_shell_prompt()
-                return
-
             self.exam_frame.launch_browser(target_url, terminal=self)
             self.print_shell_prompt()
+            
         else:
-            running_terminal = self.exam_frame.get_running_terminal()
-            if running_terminal is not None and running_terminal is not self:
-                self.append_terminal_output(
-                    "\nAnother terminal already has a running process. "
-                    "Stop it before launching a new shell command.\n"
-                )
-                self.print_shell_prompt()
-                return
-
             try:
+                if not hasattr(self, 'current_dir'):
+                    self.current_dir = os.getcwd()
+
                 self.begin_streaming_process()
+                
                 self.current_process = subprocess.Popen(
                     command,
                     shell=True,
-                    cwd=self.get_process_cwd(),
+                    cwd=self.current_dir,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
                     bufsize=0,
                 )
+                
                 self.attach_process_watchdog(
                     started_message=f"Running shell command: {command}\n",
                     finished_message="\nShell command finished.\n",
                     cleanup_temp_dir=False,
                 )
+                
+                if hasattr(self.exam_frame, 'refresh_workspace_tree'):
+                    self.after(1000, self.exam_frame.refresh_workspace_tree)
+                    
             except Exception as error:
                 self.is_flushing = False
                 self.current_process = None
                 self.append_terminal_output(f"\nCRITICAL ERROR: {error}\n")
-                self.cleanup_temp_dir_on_stop = False
-                self.exam_frame.reset_run_button()
                 self.print_shell_prompt()
+
+    def submit_exam(self):
+        self.exam_frame.submit_exam()
 
     def handle_terminal_enter(self, event=None):
         user_input = self.terminal_output.get("input_start", "end-1c").strip()
 
-        built_in_commands = ["search", "clear", "cls", "submit", "help", "exit"]
-        is_built_in = any(user_input.startswith(cmd) for cmd in built_in_commands)
+        built_in_commands = ("search", "clear", "cls", "submit", "help", "exit", "cd")
+        is_built_in = any(
+            user_input == command or user_input.startswith(f"{command} ")
+            for command in built_in_commands
+        )
 
         if is_built_in:
             self.terminal_output.configure(state="normal")
@@ -364,8 +383,11 @@ class ActiveExamFrame(ctk.CTkFrame):
     def __init__(self, parent, controller):
         super().__init__(parent, corner_radius=0, fg_color="#181818")
         self.controller = controller
+        self.WORKSPACE_DIR = os.path.abspath("./proctor_workspace")
+        os.makedirs(self.WORKSPACE_DIR, exist_ok=True)
         self.current_temp_dir = None
         self.proctor = AIProctor()
+        self.ai_proctor = self.proctor
         self.camera_image = None
 
         self.files = {}
@@ -1121,9 +1143,66 @@ class ActiveExamFrame(ctk.CTkFrame):
 
         selected_item = selected_items[0]
         selected_path = self.tree_item_paths.get(selected_item)
+        if not selected_path:
+            return
+
         if selected_path in self.files:
             self.switch_to_file(selected_path)
             self.files[selected_path].focus_set()
+            return
+
+        disk_path = os.path.abspath(os.path.join(self.WORKSPACE_DIR, selected_path))
+        if not self._is_within_workspace(disk_path) or not os.path.isfile(disk_path):
+            return
+
+        try:
+            with open(disk_path, "r", encoding="utf-8", errors="replace") as file_handle:
+                disk_content = file_handle.read()
+        except OSError as error:
+            messagebox.showerror("Open File Failed", f"Could not open '{selected_path}': {error}")
+            return
+
+        self.create_file_tab(selected_path, initial_content=disk_content, select_tab=True)
+
+    def refresh_workspace_tree(self):
+        workspace_root = os.path.abspath(self.WORKSPACE_DIR)
+        os.makedirs(workspace_root, exist_ok=True)
+
+        for item_id in self.file_tree.get_children():
+            self.file_tree.delete(item_id)
+
+        self.tree_nodes.clear()
+        self.tree_item_paths.clear()
+        self.selected_tree_node = ""
+
+        for root, dirs, files in os.walk(workspace_root):
+            dirs.sort()
+            files.sort()
+
+            relative_root = os.path.relpath(root, workspace_root)
+            relative_root = "" if relative_root in (".", os.curdir) else relative_root
+
+            if relative_root:
+                self.ensure_folder_path_in_tree(relative_root)
+
+            for folder_name in dirs:
+                folder_path = os.path.normpath(
+                    os.path.join(relative_root, folder_name)
+                ).replace("\\", "/")
+                self.ensure_folder_path_in_tree(folder_path)
+
+            for file_name in files:
+                file_path = os.path.normpath(
+                    os.path.join(relative_root, file_name)
+                ).replace("\\", "/")
+                self.insert_path_into_tree(file_path)
+
+        if self.active_filename and self.active_filename in self.tree_nodes:
+            tree_item = self.tree_nodes[self.active_filename]
+            self.file_tree.selection_set(tree_item)
+            self.file_tree.focus(tree_item)
+            self.file_tree.see(tree_item)
+            self.selected_tree_node = tree_item
 
     def launch_browser(self, target_url="http://127.0.0.1:8080", terminal=None):
         terminal = terminal or self.get_active_terminal()
@@ -1573,6 +1652,83 @@ class ActiveExamFrame(ctk.CTkFrame):
             ):
                 terminal.stop_process()
 
+    def submit_exam(self):
+        self.sync_files_to_workspace()
+        zip_path = shutil.make_archive("submission", "zip", self.WORKSPACE_DIR)
+        roll_number = self.controller.frames["LoginFrame"].roll_number_var.get().strip()
+        violation_count = getattr(
+            self.ai_proctor,
+            "violation_count",
+            getattr(self.ai_proctor, "violation_strikes", 0),
+        )
+
+        try:
+            with open(zip_path, "rb") as zip_file:
+                files = {
+                    "file": (os.path.basename(zip_path), zip_file, "application/zip")
+                }
+                payload = {
+                    "roll_number": roll_number or "R001",
+                    "violation_count": violation_count,
+                }
+                response = requests.post(
+                    "http://127.0.0.1:8000/api/submit-zip/",
+                    data=payload,
+                    files=files,
+                    timeout=5,
+                )
+
+            if response.status_code == 200:
+                messagebox.showinfo(
+                    "Success",
+                    "Your exam has been submitted safely. You may now leave the lab.",
+                )
+            else:
+                messagebox.showerror(
+                    "Upload Failed",
+                    f"Server responded with: {response.text}",
+                )
+        except requests.exceptions.RequestException as error:
+            messagebox.showerror(
+                "Network Error",
+                "Failed to upload exam. Please call an invigilator.\n"
+                f"Error: {error}",
+            )
+        finally:
+            try:
+                os.remove(zip_path)
+            except OSError:
+                pass
+
+    def sync_files_to_workspace(self):
+        """Mirror the in-memory editors onto the physical workspace."""
+        os.makedirs(self.WORKSPACE_DIR, exist_ok=True)
+
+        for filename, textbox in self.files.items():
+            relative_path = os.path.normpath(filename)
+            workspace_path = os.path.abspath(
+                os.path.join(self.WORKSPACE_DIR, relative_path)
+            )
+
+            try:
+                if (
+                    os.path.commonpath(
+                        [os.path.normcase(self.WORKSPACE_DIR), os.path.normcase(workspace_path)]
+                    )
+                    != os.path.normcase(self.WORKSPACE_DIR)
+                ):
+                    continue
+            except ValueError:
+                continue
+
+            parent_dir = os.path.dirname(workspace_path)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
+
+            file_contents = textbox.get("1.0", "end-1c")
+            with open(workspace_path, "w", encoding="utf-8") as workspace_file:
+                workspace_file.write(file_contents)
+
     def handle_editor_autopair(self, event):
         pairs = {
             "(": ")",
@@ -1656,6 +1812,7 @@ class ActiveExamFrame(ctk.CTkFrame):
         active_terminal.terminal_output.see("end")
 
         try:
+            self.sync_files_to_workspace()
             self.cleanup_temp_dir()
             self.current_temp_dir = tempfile.TemporaryDirectory()
             temp_dir = self.current_temp_dir.name

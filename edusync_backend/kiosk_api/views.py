@@ -1,6 +1,14 @@
+import os
+import os
+import secrets
+
+from django.http import JsonResponse
+from django.conf import settings
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, parser_classes
 from rest_framework.response import Response
+from rest_framework.parsers import FormParser, MultiPartParser
+from django.db import transaction
 
 from .models import Exam, Student, Submission
 
@@ -71,8 +79,11 @@ def kiosk_login(request):
             status=status.HTTP_404_NOT_FOUND,
         )
 
+    session_token = secrets.token_urlsafe(24)
+
     return Response({
         "student_name": student.name,
+        "session_token": session_token,
         "exam": {
             "title": active_exam.title,
             "subject_code": active_exam.subject_code,
@@ -82,14 +93,22 @@ def kiosk_login(request):
 
 
 @api_view(['POST'])
+@parser_classes([MultiPartParser, FormParser])
 def submit_exam(request):
     roll_number = (request.data.get('roll_number') or '').strip()
-    code_content = request.data.get('code_content') or ''
     violations = request.data.get('violation_count', 0)
+    session_token = (request.data.get('session_token') or '').strip()
+    uploaded_file = request.FILES.get('file')
 
     if not roll_number:
         return Response(
             {"error": "roll_number is required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if uploaded_file is None:
+        return Response(
+            {"error": "file is required."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -113,10 +132,39 @@ def submit_exam(request):
     if error_response is not None:
         return error_response
 
-    Submission.objects.create(
-        student=student,
-        exam=active_exam,
-        code_content=code_content,
-        violation_count=violations,
-    )
+    submissions_dir = os.path.join(settings.BASE_DIR, "submissions")
+    os.makedirs(submissions_dir, exist_ok=True)
+
+    safe_roll_number = "".join(
+        character for character in roll_number
+        if character.isalnum() or character in ("-", "_")
+    ) or "submission"
+    zip_path = os.path.join(submissions_dir, f"{safe_roll_number}_submission.zip")
+
+    with open(zip_path, "wb+") as destination:
+        for chunk in uploaded_file.chunks():
+            destination.write(chunk)
+
+    with transaction.atomic():
+        Submission.objects.create(
+            student=student,
+            exam=active_exam,
+            code_content=zip_path,
+            violation_count=violations,
+        )
     return Response({"message": "Exam submitted successfully!"})
+
+
+def upload_exam_zip(request):
+    if request.method == "POST":
+        zip_file = request.FILES["file"]
+        roll_number = request.POST.get("roll_number")
+
+        os.makedirs("submissions", exist_ok=True)
+        with open(f"submissions/{roll_number}_submission.zip", "wb+") as destination:
+            for chunk in zip_file.chunks():
+                destination.write(chunk)
+
+        return JsonResponse({"status": "success"})
+
+    return JsonResponse({"status": "error", "message": "Invalid request method"}, status=405)

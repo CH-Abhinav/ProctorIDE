@@ -12,6 +12,8 @@ EventCallback = Callable[[str], None]
 class WindowsBouncer:
 
     logger: Optional[EventCallback] = print
+    registry_client: Optional[object] = None
+    os_controller: Optional[object] = None
     lockdown_active: bool = False
     explorer_running: bool = True
     task_manager_enabled: bool = True
@@ -26,17 +28,47 @@ class WindowsBouncer:
         if self.logger is not None:
             self.logger(entry)
 
+    def _disable_task_manager(self) -> None:
+        if self.registry_client is not None:
+            self.registry_client.set_disable_taskmgr(1)
+        self.task_manager_enabled = False
+
+    def _enable_task_manager(self) -> None:
+        if self.registry_client is not None:
+            self.registry_client.set_disable_taskmgr(0)
+        self.task_manager_enabled = True
+
+    def _stop_explorer(self) -> None:
+        if self.os_controller is not None:
+            self.os_controller.stop_explorer()
+        self.explorer_running = False
+
+    def _start_explorer(self) -> None:
+        if self.os_controller is not None:
+            self.os_controller.start_explorer()
+        self.explorer_running = True
+
     def engage_lockdown(self) -> bool:
         if self.lockdown_active:
             self._record("Lockdown request ignored: lockdown already active.")
             return False
 
         self._record("Engaging mock lockdown.")
-        self._record("Simulating explorer.exe termination.")
-        self.explorer_running = False
-
-        self._record("Simulating Task Manager policy disable.")
-        self.task_manager_enabled = False
+        try:
+            self._record("Simulating Task Manager policy disable.")
+            self._disable_task_manager()
+            self._record("Simulating explorer.exe termination.")
+            self._stop_explorer()
+        except PermissionError as error:
+            self.task_manager_enabled = True
+            self.explorer_running = True
+            self._record(f"Lockdown failed: {error}")
+            return False
+        except Exception as error:
+            self.task_manager_enabled = True
+            self.explorer_running = True
+            self._record(f"Lockdown failed: {error}")
+            return False
 
         self.lockdown_active = True
         self._record("Mock lockdown engaged successfully.")
@@ -48,11 +80,21 @@ class WindowsBouncer:
             return False
 
         self._record("Releasing mock lockdown.")
-        self._record("Simulating explorer.exe restart.")
-        self.explorer_running = True
-
-        self._record("Simulating Task Manager policy re-enable.")
-        self.task_manager_enabled = True
+        try:
+            self._record("Simulating Task Manager policy re-enable.")
+            self._enable_task_manager()
+            self._record("Simulating explorer.exe restart.")
+            self._start_explorer()
+        except PermissionError as error:
+            self.task_manager_enabled = False
+            self.explorer_running = False
+            self._record(f"Release failed: {error}")
+            return False
+        except Exception as error:
+            self.task_manager_enabled = False
+            self.explorer_running = False
+            self._record(f"Release failed: {error}")
+            return False
 
         self.lockdown_active = False
         self._record("Mock lockdown released successfully.")
