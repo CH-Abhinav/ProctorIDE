@@ -76,6 +76,13 @@ class ProctorIDEKiosk(ctk.CTk):
     def destroy(self):
         if "ActiveExamFrame" in self.frames:
             self.frames["ActiveExamFrame"].stop_process()
+            workspace_dir = self.frames["ActiveExamFrame"].WORKSPACE_DIR
+            if os.path.exists(workspace_dir):
+                try:
+                    shutil.rmtree(workspace_dir)
+                    print("Workspace completely wiped.")
+                except OSError as error:
+                    print(f"Failed to wipe workspace: {error}")
         super().destroy()
 
     def ensure_lockdown_engaged(self):

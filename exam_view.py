@@ -221,12 +221,23 @@ class TerminalTab(ctk.CTkFrame):
             target_dir = command[3:].strip()
             
             if not hasattr(self, 'current_dir'):
-                self.current_dir = os.getcwd() 
+                self.current_dir = os.path.abspath(self.WORKSPACE_DIR)
             
             new_dir = os.path.abspath(os.path.join(self.current_dir, target_dir))
-            self.current_dir = new_dir
-            
-            self.append_terminal_output(f"\nChanged directory to {self.current_dir}\n")
+
+            if self._is_within_workspace(new_dir):
+                if os.path.isdir(new_dir):
+                    self.current_dir = new_dir
+                    self.append_terminal_output(
+                        f"\nChanged directory to {self.current_dir}\n"
+                    )
+                else:
+                    self.append_terminal_output(f"\nDirectory not found: {new_dir}\n")
+            else:
+                self.append_terminal_output(
+                    f"\nAccess Denied: Cannot navigate outside exam workspace.\n"
+                )
+
             self.print_shell_prompt()
             return
             
@@ -384,6 +395,8 @@ class ActiveExamFrame(ctk.CTkFrame):
         super().__init__(parent, corner_radius=0, fg_color="#181818")
         self.controller = controller
         self.WORKSPACE_DIR = os.path.abspath("./proctor_workspace")
+        if os.path.exists(self.WORKSPACE_DIR):
+            shutil.rmtree(self.WORKSPACE_DIR, ignore_errors=True)
         os.makedirs(self.WORKSPACE_DIR, exist_ok=True)
         self.current_temp_dir = None
         self.proctor = AIProctor()
@@ -797,14 +810,46 @@ class ActiveExamFrame(ctk.CTkFrame):
         terminal_frame.grid_columnconfigure(0, weight=1)
         terminal_frame.grid_rowconfigure(1, weight=1)
 
-        output_label = ctk.CTkLabel(
+        terminal_header = ctk.CTkFrame(
             terminal_frame,
+            corner_radius=0,
+            fg_color="transparent",
+        )
+        terminal_header.grid(row=0, column=0, sticky="ew", padx=14, pady=(12, 8))
+        terminal_header.grid_columnconfigure(0, weight=1)
+
+        output_label = ctk.CTkLabel(
+            terminal_header,
             text="Interactive Terminal",
             font=ctk.CTkFont(family="Segoe UI", size=15, weight="bold"),
             text_color="#CCCCCC",
             anchor="w",
         )
-        output_label.grid(row=0, column=0, sticky="w", padx=14, pady=(12, 8))
+        output_label.grid(row=0, column=0, sticky="w")
+
+        add_term_btn = ctk.CTkButton(
+            terminal_header,
+            text="+",
+            width=28,
+            height=24,
+            fg_color="#2A2D2E",
+            hover_color="#007ACC",
+            text_color="#FFF",
+            command=self.add_terminal,
+        )
+        add_term_btn.grid(row=0, column=2, padx=(0, 5))
+
+        close_term_btn = ctk.CTkButton(
+            terminal_header,
+            text="×",
+            width=28,
+            height=24,
+            fg_color="#2A2D2E",
+            hover_color="#D32F2F",
+            text_color="#FFF",
+            command=self.close_terminal,
+        )
+        close_term_btn.grid(row=0, column=3)
 
         self.terminal_tabview = ctk.CTkTabview(
             terminal_frame,
@@ -1651,6 +1696,50 @@ class ActiveExamFrame(ctk.CTkFrame):
                 and terminal.current_process.poll() is None
             ):
                 terminal.stop_process()
+
+    def add_terminal(self):
+        count = len(self.terminals) + 1
+        tab_name = f"Terminal {count}"
+        while tab_name in self.terminals:
+            count += 1
+            tab_name = f"Terminal {count}"
+
+        tab = self.terminal_tabview.add(tab_name)
+        tab.grid_columnconfigure(0, weight=1)
+        tab.grid_rowconfigure(0, weight=1)
+
+        terminal = TerminalTab(tab, self)
+        terminal.grid(row=0, column=0, sticky="nsew")
+
+        self.terminals[tab_name] = terminal
+        self.terminal_tabview.set(tab_name)
+
+    def close_terminal(self):
+        if len(self.terminals) <= 1:
+            messagebox.showwarning(
+                "Cannot Close",
+                "You must have at least one terminal open.",
+            )
+            return
+
+        active_tab_name = self.terminal_tabview.get()
+        terminal_to_close = self.terminals.get(active_tab_name)
+        if terminal_to_close is None:
+            return
+
+        if (
+            terminal_to_close.current_process is not None
+            and terminal_to_close.current_process.poll() is None
+        ):
+            terminal_to_close.stop_process()
+
+        remaining_tabs = [name for name in self.terminals if name != active_tab_name]
+
+        self.terminal_tabview.delete(active_tab_name)
+        del self.terminals[active_tab_name]
+
+        if remaining_tabs:
+            self.terminal_tabview.set(remaining_tabs[0])
 
     def submit_exam(self):
         self.sync_files_to_workspace()
