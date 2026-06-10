@@ -36,7 +36,11 @@
     <a href="{% url 'exam_detail' submission.exam.id %}" class="btn btn-outline-light btn-sm btn-portal">Back to Exam</a>
 </section>
 
-<section class="code-shell">
-    <pre><code>{{ submission.code_content }}</code></pre>
-</section>
+<div class="mt-4">
+    <h4>Project Files</h4>
+    <p>The student's full workspace was securely packaged.</p>
+    <a href="{% url 'download_submission' submission.id %}" class="btn btn-primary" style="background-color: #007ACC; border: none; padding: 10px 20px; border-radius: 5px; color: white; text-decoration: none;">
+        📥 Download Submission ZIP
+    </a>
+</div>
 {% endblock %}

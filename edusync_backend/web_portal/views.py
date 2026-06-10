@@ -1,6 +1,9 @@
+import os
+
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
+from django.http import FileResponse, Http404
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -70,3 +73,23 @@ def submission_detail(request, submission_id):
         "web_portal/submission.html",
         {"submission": submission},
     )
+
+
+@login_required(login_url="portal_login")
+def download_submission(request, submission_id):
+    submission = get_object_or_404(
+        Submission.objects.select_related("exam").filter(
+            exam__examiner=request.user
+        ),
+        pk=submission_id,
+    )
+    file_path = submission.code_content
+
+    if file_path and os.path.exists(file_path):
+        return FileResponse(
+            open(file_path, "rb"),
+            as_attachment=True,
+            filename=os.path.basename(file_path),
+        )
+
+    raise Http404("Zip file not found on server.")

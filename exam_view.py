@@ -216,6 +216,8 @@ class TerminalTab(ctk.CTkFrame):
 
     def process_shell_command(self, command):
         command = command.strip()
+        if hasattr(self.exam_frame, 'sync_files_to_workspace'):
+            self.exam_frame.sync_files_to_workspace()
         
         if command.startswith("cd "):
             target_dir = command[3:].strip()
@@ -463,6 +465,29 @@ class ActiveExamFrame(ctk.CTkFrame):
         self.edit_menu.add_command(label="Undo", command=self.undo_active_editor)
         self.edit_menu.add_command(label="Redo", command=self.redo_active_editor)
 
+        self.terminal_menu = tk.Menu(
+            self,
+            tearoff=0,
+            bg="#1F1F1F",
+            fg="#CCCCCC",
+            bd=0,
+            activebackground="#007ACC",
+            activeforeground="#FFFFFF",
+        )
+        self.terminal_menu.add_command(
+            label="New Terminal",
+            command=self.add_terminal,
+        )
+        self.terminal_menu.add_command(
+            label="Close Active Terminal",
+            command=self.close_terminal,
+        )
+        self.terminal_menu.add_separator()
+        self.terminal_menu.add_command(
+            label="Close All Terminals",
+            command=self.close_all_terminals,
+        )
+
         file_button = ctk.CTkButton(
             menu_bar,
             text="File",
@@ -497,6 +522,24 @@ class ActiveExamFrame(ctk.CTkFrame):
         edit_button.bind(
             "<Button-1>",
             lambda event: self.post_dropdown_menu(self.edit_menu, edit_button),
+        )
+
+        terminal_button = ctk.CTkButton(
+            menu_bar,
+            text="Terminal",
+            width=60,
+            height=24,
+            corner_radius=4,
+            fg_color="transparent",
+            hover_color="#1F1F1F",
+            text_color="#CCCCCC",
+            font=ctk.CTkFont(family="Segoe UI", size=12),
+            command=lambda: self.post_dropdown_menu(self.terminal_menu, terminal_button),
+        )
+        terminal_button.pack(side="left", padx=(0, 6))
+        terminal_button.bind(
+            "<Button-1>",
+            lambda event: self.post_dropdown_menu(self.terminal_menu, terminal_button),
         )
 
         action_header = ctk.CTkFrame(
@@ -871,13 +914,7 @@ class ActiveExamFrame(ctk.CTkFrame):
         )
 
         self.terminals = {}
-        for tab_name in ("Terminal 1", "Terminal 2"):
-            tab = self.terminal_tabview.add(tab_name)
-            tab.grid_columnconfigure(0, weight=1)
-            tab.grid_rowconfigure(0, weight=1)
-            terminal = TerminalTab(tab, self)
-            terminal.grid(row=0, column=0, sticky="nsew")
-            self.terminals[tab_name] = terminal
+        self.add_terminal()
         self.right_paned.add(terminal_frame, minsize=100)
 
         self.create_file_tab(
@@ -930,6 +967,7 @@ class ActiveExamFrame(ctk.CTkFrame):
         editor.bind("<KeyPress>", self.handle_editor_autopair)
         editor.bind("<Return>", self.auto_indent)
         editor.bind("<Tab>", self.insert_four_spaces)
+        editor.bind("<Control-s>", lambda event: self.sync_files_to_workspace() or "break")
         editor.bind(
             "<KeyRelease>",
             lambda event, name=filename: self.on_key_release(event, name),
@@ -1697,12 +1735,24 @@ class ActiveExamFrame(ctk.CTkFrame):
             ):
                 terminal.stop_process()
 
+    def _is_within_workspace(self, candidate_path):
+        try:
+            workspace_root = os.path.normcase(os.path.abspath(self.WORKSPACE_DIR))
+            candidate_root = os.path.normcase(os.path.abspath(candidate_path))
+            return (
+                os.path.commonpath([workspace_root, candidate_root])
+                == workspace_root
+            )
+        except ValueError:
+            return False
+
     def add_terminal(self):
-        count = len(self.terminals) + 1
-        tab_name = f"Terminal {count}"
+        base_name = "Terminal"
+        tab_name = base_name
+        spaces = ""
         while tab_name in self.terminals:
-            count += 1
-            tab_name = f"Terminal {count}"
+            spaces += " "
+            tab_name = base_name + spaces
 
         tab = self.terminal_tabview.add(tab_name)
         tab.grid_columnconfigure(0, weight=1)
@@ -1715,31 +1765,30 @@ class ActiveExamFrame(ctk.CTkFrame):
         self.terminal_tabview.set(tab_name)
 
     def close_terminal(self):
-        if len(self.terminals) <= 1:
-            messagebox.showwarning(
-                "Cannot Close",
-                "You must have at least one terminal open.",
-            )
-            return
-
         active_tab_name = self.terminal_tabview.get()
-        terminal_to_close = self.terminals.get(active_tab_name)
-        if terminal_to_close is None:
+        if not active_tab_name or active_tab_name not in self.terminals:
             return
 
+        terminal_to_close = self.terminals[active_tab_name]
         if (
             terminal_to_close.current_process is not None
             and terminal_to_close.current_process.poll() is None
         ):
             terminal_to_close.stop_process()
 
-        remaining_tabs = [name for name in self.terminals if name != active_tab_name]
-
         self.terminal_tabview.delete(active_tab_name)
         del self.terminals[active_tab_name]
 
-        if remaining_tabs:
-            self.terminal_tabview.set(remaining_tabs[0])
+    def close_all_terminals(self):
+        for tab_name in list(self.terminals.keys()):
+            terminal = self.terminals[tab_name]
+            if (
+                terminal.current_process is not None
+                and terminal.current_process.poll() is None
+            ):
+                terminal.stop_process()
+            self.terminal_tabview.delete(tab_name)
+            del self.terminals[tab_name]
 
     def submit_exam(self):
         self.sync_files_to_workspace()

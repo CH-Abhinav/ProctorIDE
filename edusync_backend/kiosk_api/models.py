@@ -15,6 +15,7 @@ class Exam(models.Model):
     subject_code = models.CharField(max_length=20, default="UNKNOWN")
     duration_seconds = models.IntegerField(default=7200)
     is_active = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     def __str__(self):
         return f"{self.title} ({self.subject_code})"
