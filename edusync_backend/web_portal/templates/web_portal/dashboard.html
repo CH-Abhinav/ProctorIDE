@@ -6,7 +6,7 @@
 <section class="mb-4 mb-lg-5">
     <div class="row g-4 align-items-end">
         <div class="col-lg-8">
-            <p class="hero-kicker mb-2">Professor Workspace</p>
+            <p class="hero-kicker mb-2">{% if is_admin %}Administrator Workspace{% else %}Teacher Workspace{% endif %}</p>
             <h1 class="page-title mb-3">Exam control center for secure lab assessments.</h1>
             <p class="muted-copy mb-0">Track active sessions, review submissions, and surface integrity issues from one dashboard.</p>
         </div>
@@ -47,7 +47,7 @@
                         <div class="fw-semibold">{{ exam.title }}</div>
                         <div class="muted-copy small">Exam ID #{{ exam.id }}</div>
                     </td>
-                    <td><span class="subject-pill">{{ exam.subject_code }}</span></td>
+                    <td><span class="subject-pill">{{ exam.course.code|default:"No Course" }}</span></td>
                     <td>{{ exam.duration_seconds }}s</td>
                     <td>
                         <span class="status-pill {% if exam.is_active %}active{% else %}inactive{% endif %}">
@@ -63,7 +63,7 @@
                 <tr>
                     <td colspan="6" class="text-center py-5">
                         <div class="fw-semibold mb-1">No exams available yet.</div>
-                        <div class="muted-copy">Create exam records in Django Admin to start receiving kiosk submissions.</div>
+                        <div class="muted-copy">Create courses and exams in Django Admin to start receiving kiosk submissions.</div>
                     </td>
                 </tr>
                 {% endfor %}

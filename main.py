@@ -110,6 +110,7 @@ class ProctorIDEKiosk(ctk.CTk):
                 data = response.json()
                 print(f"Login Successful! Welcome {data['student_name']}")
                 self.session_token = data.get("session_token", "")
+                self.subject_code = subject_code
 
                 real_duration = data["exam"]["duration_seconds"]
                 self.frames["ActiveExamFrame"].remaining_seconds = real_duration
@@ -163,6 +164,7 @@ class ProctorIDEKiosk(ctk.CTk):
                 "roll_number": roll_number,
                 "violation_count": strikes,
                 "session_token": session_token,
+                "subject_code": getattr(self, "subject_code", ""),
             }
 
             with open(archive_path, "rb") as archive_file:

@@ -10,7 +10,7 @@
                 <p class="hero-kicker mb-2">Exam Review</p>
                 <h1 class="page-title h2 mb-3">{{ exam.title }}</h1>
                 <div class="d-flex flex-wrap gap-2 mb-3">
-                    <span class="subject-pill">{{ exam.subject_code }}</span>
+                    <span class="subject-pill">{{ exam.course.code|default:"No Course" }}</span>
                     <span class="status-pill {% if exam.is_active %}active{% else %}inactive{% endif %}">
                         {% if exam.is_active %}Active Session{% else %}Archived Session{% endif %}
                     </span>

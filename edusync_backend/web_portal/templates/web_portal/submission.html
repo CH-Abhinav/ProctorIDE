@@ -10,7 +10,7 @@
                 <p class="hero-kicker mb-2">Submission Review</p>
                 <h1 class="page-title h2 mb-3">{{ submission.student.name }}</h1>
                 <div class="d-flex flex-wrap gap-2 mb-3">
-                    <span class="subject-pill">{{ submission.exam.subject_code }}</span>
+                    <span class="subject-pill">{{ submission.exam.course.code|default:"No Course" }}</span>
                     <span class="status-pill {% if submission.violation_count > 0 %}inactive{% else %}active{% endif %}">
                         {% if submission.violation_count > 0 %}{{ submission.violation_count }} Strike{{ submission.violation_count|pluralize }}{% else %}Clean Submission{% endif %}
                     </span>
