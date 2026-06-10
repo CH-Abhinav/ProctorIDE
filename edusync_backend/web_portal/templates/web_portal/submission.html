@@ -1,6 +1,6 @@
 {% extends "web_portal/base.html" %}
 
-{% block title %}Submission {{ submission.student.roll_number }} | Proctor IDE Command Center{% endblock %}
+{% block title %}{{ submission.student.roll_number }} | Proctor IDE Command Center{% endblock %}
 
 {% block content %}
 <section class="mb-4">
@@ -11,18 +11,18 @@
                 <h1 class="page-title h2 mb-3">{{ submission.student.name }}</h1>
                 <div class="d-flex flex-wrap gap-2 mb-3">
                     <span class="subject-pill">{{ submission.exam.subject_code }}</span>
-                    <span class="status-pill {% if submission.exam.is_active %}active{% else %}inactive{% endif %}">
-                        {{ submission.exam.title }}
+                    <span class="status-pill {% if submission.violation_count > 0 %}inactive{% else %}active{% endif %}">
+                        {% if submission.violation_count > 0 %}{{ submission.violation_count }} Strike{{ submission.violation_count|pluralize }}{% else %}Clean Submission{% endif %}
                     </span>
                 </div>
-                <p class="muted-copy mb-0">Roll number {{ submission.student.roll_number }} submitted on {{ submission.submitted_at|date:"M d, Y H:i" }}.</p>
+                <p class="muted-copy mb-0">Roll Number: {{ submission.student.roll_number }} · Submitted: {{ submission.submitted_at|date:"M d, Y H:i" }}</p>
             </div>
         </div>
         <div class="col-lg-4">
-            <div class="summary-card p-4 h-100 {% if submission.violation_count > 0 %}border-warning{% endif %}">
-                <p class="muted-copy text-uppercase small mb-2">AI Strike Count</p>
-                <div class="summary-number">{{ submission.violation_count }}</div>
-                <p class="muted-copy mb-0">Use this as a review signal alongside the submitted code and lab observations.</p>
+            <div class="summary-card p-4 h-100">
+                <p class="muted-copy text-uppercase small mb-2">Exam</p>
+                <div class="summary-number">{{ submission.exam.title|default:"Exam" }}</div>
+                <p class="muted-copy mb-0">The captured workspace archive is available for download below.</p>
             </div>
         </div>
     </div>
@@ -30,17 +30,18 @@
 
 <section class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
     <div>
-        <h2 class="h4 mb-1">Captured Code</h2>
-        <p class="muted-copy mb-0">Rendered exactly as it was submitted by the kiosk application.</p>
+        <h2 class="h4 mb-1">Project Workspace Archive</h2>
+        <p class="muted-copy mb-0">The student's full project directory was securely packaged as a ZIP file.</p>
     </div>
     <a href="{% url 'exam_detail' submission.exam.id %}" class="btn btn-outline-light btn-sm btn-portal">Back to Exam</a>
 </section>
 
-<div class="mt-4">
-    <h4>Project Files</h4>
-    <p>The student's full workspace was securely packaged.</p>
-    <a href="{% url 'download_submission' submission.id %}" class="btn btn-primary" style="background-color: #007ACC; border: none; padding: 10px 20px; border-radius: 5px; color: white; text-decoration: none;">
-        📥 Download Submission ZIP
+<div class="panel-card p-5 text-center mt-4 border" style="border-radius: 12px; background-color: #1e293b; border-color: #334155 !important;">
+    <h4 class="mb-3 text-white">Download Exam Submission</h4>
+    <p class="mb-4" style="color: #94a3b8;">Extract this archive to your local machine to review, run, and grade the student's complete Django project natively.</p>
+    
+    <a href="{% url 'download_submission' submission.id %}" class="btn btn-primary shadow-sm" style="background-color: #007ACC; border: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; color: white; text-decoration: none; display: inline-block; font-size: 1.1rem; transition: background-color 0.2s;">
+        <span style="margin-right: 8px;">📥</span> Download Submission ZIP
     </a>
 </div>
 {% endblock %}
